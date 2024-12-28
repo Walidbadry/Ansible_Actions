@@ -1,0 +1,86 @@
+---
+- name: Install and configure NGINX web server
+  hosts: webservers
+  become: yes  # Use sudo privileges
+
+  tasks:
+
+    - name: Install NGINX (for Debian/Ubuntu)
+      apt:
+        name: nginx
+        state: latest
+        # state: absent #for remove nginx
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install NGINX (for RHEL/CentOS)
+      yum:
+        name: nginx=1.18*
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Start and enable NGINX service
+      service:
+        name: nginx
+        state: started
+        # state: stopped
+        enabled: yes
+
+    - name: Create an index.html file for the NGINX web server
+      copy:
+        dest: /var/www/html/index.html
+        content: |
+          <html>
+          <head>
+              <title>Welcome to NGINX!</title>
+          </head>
+          <body>
+              <h1>Success! The NGINX web server is working!</h1>
+          </body>
+          </html>
+
+    - name: Open HTTP port 80 on firewall (for RHEL/CentOS)
+      firewalld:
+        port: 80/tcp
+        permanent: true
+        state: enabled
+        immediate: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Open HTTP port 80 on firewall (for Ubuntu with UFW)
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+      when: ansible_os_family == "Debian"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##run ansible play_book
+#nsible-playbook -i hosts my_playboock.yml
+

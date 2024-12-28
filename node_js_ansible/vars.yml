@@ -1,0 +1,7 @@
+# vars.yml
+app_user: walid
+app_name: my-node-app
+app_src: app/
+app_dest: /var/www/my-node-app/
+app_owner: www-data
+app_group: www-data

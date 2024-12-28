@@ -1,0 +1,20 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1   # specify your AWS region
+ 
+keyed_groups:
+  - key: tags   # Organize hosts by the Name tag
+    prefix: tag
+  - key: instances_type
+    prefix: instances_type
+  
+hostnames:
+  - tag:Name         # Use the Name tag as the hostname
+
+# filters:
+#   instance-state-name: running   # Only include running instances
+#   tag:Name: dev*         # Use the Name tag as the hostname
+ 
+#to run this file and see output 
+## ansible-inventory -i dynamic_inventory_aws_ec2.yaml --list
+ ## ansible-inventory -i dynamic_inventory_aws_ec2.yaml --graph

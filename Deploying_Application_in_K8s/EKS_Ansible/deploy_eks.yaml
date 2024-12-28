@@ -1,0 +1,17 @@
+- name: Configer a Kubernetes 
+- hosts: localhost
+  environment:
+    KUBECONFIG: /path/to/my-kubeconfig  # Global KUBECONFIG applied to all tasks
+  tasks:
+    - name: Create a Kubernetes namespace
+      community.kubernetes.k8s:
+        api_version: v1
+        kind: Namespace
+        metadata:
+          name: my-namespace
+
+    - name: Deploy Nginx using an external file
+      community.kubernetes.k8s:
+        src: /path/to/nginx-deployment.yml  # Path to the external manifest file
+        state: present
+        namespace: my-namespace

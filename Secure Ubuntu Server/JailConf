@@ -1,0 +1,15 @@
+[DEFAULT]
+# Ban IP for 10 minutes after 5 failed login attempts
+bantime  = 600
+findtime = 600
+maxretry = 5
+# Enable SSH jail
+[sshd]
+enabled  = true
+# Jail for a custom port (e.g., port 12345 for a custom service)
+[customport]
+enabled  = true
+port     = 12345
+filter   = customport
+logpath  = /var/log/custom_service.log
+maxretry = 3

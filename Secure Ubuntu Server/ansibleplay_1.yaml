@@ -1,0 +1,143 @@
+---
+- name: All-in-One Ubuntu Server Hardening and Configuration
+  hosts: myhosts
+  become: yes
+  vars:
+    packages:
+      - vim
+      - git
+      - htop
+      - curl
+      - wget
+      - unzip
+      - build-essential
+      - net-tools
+      - tree
+      - fail2ban
+      - ufw
+    jail_local_src: "./JailConf"  # Path to custom jail.local file
+    custom_port: 12345           # Replace with your desired custom SSH port
+    users:
+      - username: alice
+        is_admin: yes
+        pub_key_path: "/path/to/keys/alice.pub"
+      - username: bob
+        is_admin: no
+        pub_key_path: "/path/to/keys/bob.pub"
+      - username: charlie
+        is_admin: no
+        pub_key_path: "/path/to/keys/charlie.pub"
+
+  tasks:
+    - name: Ensure the system is Debian/Ubuntu-based
+      fail:
+        msg: "This playbook supports only Debian/Ubuntu systems."
+      when: ansible_facts['os_family'] != "Debian"
+
+    - name: Create user accounts and configure SSH
+      block:
+        - name: Create user accounts
+          user:
+            name: "{{ item.username }}"
+            state: present
+            groups: "{{ 'sudo' if item.is_admin else '' }}"
+            shell: /bin/bash
+          loop: "{{ users }}"
+
+        - name: Create .ssh directory
+          file:
+            path: "/home/{{ item.username }}/.ssh"
+            state: directory
+            owner: "{{ item.username }}"
+            group: "{{ item.username }}"
+            mode: '0700'
+          loop: "{{ users }}"
+
+        - name: Copy SSH public key
+          copy:
+            src: "{{ item.pub_key_path }}"
+            dest: "/home/{{ item.username }}/.ssh/authorized_keys"
+            owner: "{{ item.username }}"
+            group: "{{ item.username }}"
+            mode: '0600'
+          loop: "{{ users }}"
+
+        - name: Configure passwordless sudo for admins
+          lineinfile:
+            path: /etc/sudoers
+            regexp: '^%sudo'
+            line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+          when: item.is_admin | bool
+          loop: "{{ users }}"
+          loop_control:
+            label: "{{ item.username }}"
+
+    - name: Update system and install packages
+      block:
+        - name: Update apt cache and upgrade packages
+          apt:
+            update_cache: yes
+            upgrade: dist
+
+        - name: Install required packages
+          apt:
+            name: "{{ packages }}"
+            state: present
+            update_cache: yes
+
+    - name: Configure Fail2Ban
+      block:
+        - name: Deploy custom jail.local configuration
+          copy:
+            src: "{{ jail_local_src }}"
+            dest: /etc/fail2ban/jail.local
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Ensure Fail2Ban is running
+          service:
+            name: fail2ban
+            state: started
+            enabled: yes
+
+    - name: Configure UFW
+      block:
+        - name: Enable UFW and set policies
+          ufw:
+            state: enabled
+            default: "{{ item }}"
+          loop:
+            - { direction: incoming, policy: deny }
+            - { direction: outgoing, policy: allow }
+
+        - name: Allow custom SSH port
+          ufw:
+            rule: allow
+            port: "{{ custom_port }}"
+            proto: tcp
+
+    - name: Harden SSH configuration
+      block:
+        - name: Deploy hardened SSHD_CONFIG
+          copy:
+            src: ./Hardened-SSHD-CONFIG
+            dest: /etc/ssh/sshd_config
+            owner: root
+            group: root
+            mode: '0600'
+          notify: Restart sshd
+
+    - name: Reboot the server
+      reboot:
+        reboot_timeout: 600
+
+    - name: Test server accessibility after reboot
+      wait_for_connection:
+        timeout: 300
+
+  handlers:
+    - name: Restart sshd
+      service:
+        name: "{{ ansible_facts.services['sshd'] | default('ssh') }}"
+        state: restarted

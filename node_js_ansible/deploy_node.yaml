@@ -1,0 +1,58 @@
+---
+- name: Deploy Node.js Application
+  hosts: web
+  become: yes
+  become_user: "{{ app_user }}"
+
+  vars_files:
+    - vars.yml  # Reference the external variables file
+
+  tasks:
+    - name: Update apt repo and cache
+      ansible.builtin.apt:
+        update_cache: yes
+        force_apt_get: yes
+        cache_valid_time: 3600
+
+    - name: Install Node.js and npm
+      ansible.builtin.apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+
+    - name: Create new Linux user for Node.js
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        comment: "{{ app_user }} admin"
+        group: admin
+
+    - name: Copy application files
+      ansible.builtin.copy:
+        src: "{{ app_src }}"  # Source directory on your Ansible control node
+        dest: "{{ app_dest }}"  # Destination on the remote server
+        owner: "{{ app_owner }}"
+        group: "{{ app_group }}"
+        mode: '0755'
+        recursive: yes
+
+    - name: Install application dependencies
+      ansible.builtin.command:
+        cmd: npm install
+        args:
+          chdir: "{{ app_dest }}"  # Change to the app directory before running npm
+
+    - name: Start the Node.js application
+      ansible.builtin.command:
+        cmd: node app.js
+        args:
+          chdir: "{{ app_dest }}"  # Change to the app directory before starting the app
+      async: 1000  # Run asynchronously for 10 seconds
+      poll: 0   # Don't wait for the command to finish
+
+    - name: Ensure app is running
+      ansible.builtin.shell: ps aux | grep node
+      register: app_status
+
+    - debug:
+        msg: "{{ app_status.stdout_lines }}"

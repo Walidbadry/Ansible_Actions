@@ -1,0 +1,109 @@
+---
+- name: Wait for SSH connection
+  hosts: all
+  become: yes
+  gather_facts: False
+  tasks:
+    - name: Wait for SSH to be available
+      wait_for:
+        port: 22
+        delay: 10
+        search_regex: OpenSSH
+        host: "{{ ansible_host | default(inventory_hostname) }}"
+        state: started
+        timeout: 300  # Timeout after 5 minutes (adjust as needed)
+        vars:
+          ansible_connection: local
+          ansible_python_interpreter: /usr/bin/python  # Use the correct Python interpreter
+
+
+
+- name: Install Python 3
+  hosts: all
+  become: yes
+  vars:
+    ansible_python_interpreter: /usr/bin/python  # Use the correct Python interpreter
+  tasks:
+    - name: Update yum cache
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Install prerequisite packages
+      yum:
+        name:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+
+    - name: Install Python 3
+      yum:
+        name: 'python3'
+        state: latest
+
+- name: Deploy and Configure Docker
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Add Docker repository
+      yum_repository:
+        name: docker
+        description: Docker CE Stable
+        baseurl: https://download.docker.com/linux/centos/7/x86_64/stable
+        gpgcheck: yes
+        gpgkey: https://download.docker.com/linux/centos/gpg
+        enabled: yes
+
+    - name: Install Docker
+      yum:
+        name: docker-ce
+        state: present
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install Docker-Compose
+      command: curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+      args:
+        creates: /usr/local/bin/docker-compose
+
+    - name: Set executable permissions for Docker-Compose
+      command: chmod +x /usr/local/bin/docker-compose
+
+    - name: Add ec2-user to the docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes  # Ensures the user is added to the docker group without removing from other groups
+  
+    - name: Reconnect to server sedsion
+      meta: reset_connection
+
+    - name: Copy Docker Compose file to server
+      copy:
+        src: ./docker-compose.yml
+        dest: /home/ec2-user/docker-compose.yml  # Ensure it matches ec2-user's directory
+
+    - name: Start Docker containers
+      command: docker-compose up -d
+      args:
+        chdir: /home/ec2-user  # Path where the docker-compose.yml file is located
+
+    - name: Verify Docker installation
+      command: docker --version
+      register: docker_version
+
+    - debug:
+        msg: "Docker version: {{ docker_version.stdout }}"
+
+    - name: Verify Docker-Compose installation
+      command: docker-compose --version
+      register: docker_compose_version
+
+    - debug:
+        msg: "Docker Compose version: {{ docker_compose_version.stdout }}"

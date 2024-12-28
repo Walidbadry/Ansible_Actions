@@ -1,0 +1,117 @@
+---
+- name: Deploy and configure Nexus Repository Manager
+  hosts: nexus  # Replace with your actual target hosts or IP address
+  become: yes
+
+  vars:
+    nexus_user: nexus
+    nexus_group: nexus
+    nexus_version: "3.41.1-01"  # Specify the Nexus version
+    nexus_home: /opt/nexus
+    nexus_data: /opt/sonatype-work
+    nexus_tarball: "nexus-{{ nexus_version }}-unix.tar.gz"
+    nexus_download_url: "https://download.sonatype.com/nexus/3/{{ nexus_tarball }}"
+    java_package: openjdk-11-jdk
+
+  tasks:
+
+    - name: Update apt repo and cache
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install Java
+      ansible.builtin.apt:
+        name: "{{ java_package }}"
+        state: present
+
+    - name: Create Nexus user and group
+      ansible.builtin.group:
+        name: "{{ nexus_group }}"
+        state: present
+
+    - name: Create Nexus user
+      ansible.builtin.user:
+        name: "{{ nexus_user }}"
+        group: "{{ nexus_group }}"
+        shell: /bin/bash
+        createhome: yes
+
+    - name: Create Nexus directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ nexus_user }}"
+        group: "{{ nexus_group }}"
+        mode: '0755'
+      loop:
+        - "{{ nexus_home }}"
+        - "{{ nexus_data }}"
+
+    - name: Download Nexus
+      ansible.builtin.get_url:
+        url: "{{ nexus_download_url }}"
+        dest: "/tmp/{{ nexus_tarball }}"
+      register: download_results
+
+    - name: Extract Nexus
+      ansible.builtin.unarchive:
+        src: "{{ download_results.dest }}"
+        dest: "{{ nexus_home }}"
+        remote_src: yes
+        creates: "{{ nexus_home }}/nexus-{{ nexus_version }}"
+
+    - name: Set ownership for Nexus files
+      ansible.builtin.command:
+        cmd: chown -R "{{ nexus_user }}:{{ nexus_group }}" "{{ nexus_home }}"
+
+    - name: Set run_as_user in nexus.rc file
+      ansible.builtin.blockinfile:
+        path: "{{ nexus_home }}/nexus-{{ nexus_version }}/bin/nexus.rc"
+        block: |
+          RUN_AS_USER={{ nexus_user }}
+        create: yes
+
+    - name: Configure Nexus as a service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/nexus.service
+        content: |
+          [Unit]
+          Description=Nexus Service
+          After=network.target
+
+          [Service]
+          Type=forking
+          User={{ nexus_user }}
+          Group={{ nexus_group }}
+          ExecStart={{ nexus_home }}/nexus-{{ nexus_version }}/bin/nexus start
+          ExecStop={{ nexus_home }}/nexus-{{ nexus_version }}/bin/nexus stop
+          Restart=on-abort
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+
+    - name: Enable and start Nexus service
+      ansible.builtin.systemd:
+        name: nexus
+        enabled: yes
+        state: started
+    # Verification of Nexus service
+
+    - name: Verify Nexus is running - Check with ps
+      shell: ps aux | grep nexus
+      register: app_status
+    - debug:
+        msg: "{{ app_status.stdout_lines }}"
+
+    - name: Verify Nexus is running - Check with netstat
+      shell: netstat -plnt
+      register: app_status
+    - debug:
+        msg: "{{ app_status.stdout_lines }}"
+        
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

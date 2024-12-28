@@ -1,0 +1,42 @@
+>>>> ansible <host-pattern> -m <module> -a <arguments> [options] <<<<
+
+<host-pattern>: This is the group or host from your inventory (e.g., web, db, or all).
+-m <module>: Specifies the Ansible module to use (e.g., ping, shell, yum, apt, copy, file, etc.).
+-a <arguments>: Arguments for the module.
+[options]: Additional options like -i for inventory, -u for user, -b for privilege escalation, etc.
+Commonly Used Modules:
+ping: Checks if Ansible can reach the hosts.
+command: Executes a command on the remote host.
+shell: Executes a command using the shell on the remote host.
+copy: Copies a file to the remote host.
+yum / apt: Manages packages on the remote host.
+
+######################################################
+>>ansible ec2 -i hosts -m ping
+######################################################
+##for disable host key checking 
+###in long term servers
+>>ssh-keygen -H 182.123.12.2133 >>~/.ssh/known_hosts
+>>ssh root@182.123.12.2133 
+
+###for less term server
+>vim ~/.ansible.cfg
+ [defaults]
+ host_key_checking = False
+######################################################
+############################################################################################################
+######################################################
+######################################################
+##run ansible play_book
+ansible-playbook -i hosts my_playboock.yml
+
+
+
+
+
+######################################################
+######################################################
+##to install collection frome galaxy
+>>ansible-galaxy collection install .....
+
+

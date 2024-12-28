@@ -1,0 +1,157 @@
+---
+- name: Secure Ubuntu Server
+  hosts: all
+  become: true
+
+  vars:
+    ssh_port: 2222                # Change SSH port
+    non_root_user: "adminuser"    # Replace with your desired user
+    packages_to_install:
+      - ufw
+      - fail2ban
+      - clamav
+      - unattended-upgrades
+      - rkhunter
+      - apparmor
+    services_to_disable:
+      - apache2
+      - mysql
+    firewall_allowed_ports:
+      - 80    # HTTP
+      - 443   # HTTPS
+      - "{{ ssh_port }}"  # Custom SSH port
+    users:
+      - name: user1
+        group: group1
+      - name: user2
+        group: group1
+      - name: user3
+
+      - name: user6
+        group: group2
+      - name: user7
+        group: group2
+      - name: user8
+
+    groups:
+      - group1
+      - group2
+
+  tasks:
+    # 1. Update and upgrade system
+    - name: Update and upgrade the system
+      apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+
+    # 2. Install necessary packages
+    - name: Install security packages
+      apt:
+        name: "{{ packages_to_install }}"
+        state: latest
+
+    # 3. Create groups
+    - name: Create user groups
+      group:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ groups }}"
+
+    # 4. Create users and assign to groups
+    - name: Create users and assign to respective groups
+      user:
+        name: "{{ item.name }}"
+        groups: "{{ item.group }}"
+        append: yes
+        shell: /bin/bash
+        state: present
+      loop: "{{ users }}"
+
+    # 5. Disable root login and password authentication
+    - name: Configure SSH settings
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.key }}"
+        line: "{{ item.value }}"
+      loop:
+        - { key: '^PermitRootLogin', value: 'PermitRootLogin no' }
+        - { key: '^PasswordAuthentication', value: 'PasswordAuthentication no' }
+        - { key: '^Port', value: "Port {{ ssh_port }}" }
+
+    # 6. Restart SSH service
+    - name: Restart SSH service
+      service:
+        name: sshd
+        state: restarted
+
+    # 7. Configure UFW firewall
+    - name: Enable UFW and allow necessary ports
+      ufw:
+        rule: allow
+        name: "{{ item }}"
+      loop: "{{ firewall_allowed_ports }}"
+    
+    - name: Enable UFW
+      ufw:
+        state: enabled
+        logging: on
+
+    # 8. Install and configure Fail2Ban
+    - name: Configure Fail2Ban service
+      service:
+        name: fail2ban
+        state: started
+        enabled: yes
+
+    # 9. Set up automatic security updates
+    - name: Enable unattended-upgrades
+      apt:
+        name: unattended-upgrades
+        state: present
+
+    # 10. Install ClamAV and update database
+    - name: Install ClamAV
+      apt:
+        name: clamav
+        state: latest
+
+    - name: Update ClamAV database
+      command: freshclam
+
+    # 11. Install and run Rootkit Hunter
+    - name: Install rkhunter
+      apt:
+        name: rkhunter
+        state: latest
+
+    - name: Run rkhunter check
+      command: rkhunter --check --skip-keypress
+
+    # 12. Ensure AppArmor is running
+    - name: Ensure AppArmor is enabled
+      service:
+        name: apparmor
+        state: started
+        enabled: yes
+
+    # 13. Disable unused services
+    - name: Disable unnecessary services
+      service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop: "{{ services_to_disable }}"
+
+    # 14. Ensure strong password policies
+    - name: Set password policy
+      lineinfile:
+        path: /etc/security/pwquality.conf
+        regexp: "{{ item.key }}"
+        line: "{{ item.value }}"
+      loop:
+        - { key: '^minlen', value: 'minlen = 12' }
+        - { key: '^dcredit', value: 'dcredit = -1' }
+        - { key: '^ucredit', value: 'ucredit = -1' }
+        - { key: '^ocredit', value: 'ocredit = -1' }
+        - { key: '^lcredit', value: 'lcredit = -1' }

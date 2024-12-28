@@ -1,0 +1,8 @@
+#to acces eksctl inside klusternode >>aws comand line >aws iam-authenticator
+>>aws eks update-kubeconfig --name myapp-eks-cluster --region .....
+>>kupectl get node 
+>>
+
+
+##for destroy all infra
+>>terraform destroy --auto-approve
